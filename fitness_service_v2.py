@@ -21,6 +21,19 @@ client = OpenAI(
 
 model = f"gpt://{folder_id}/qwen3-235b-a22b-fp8/latest"
 
+try:
+    vector_store = client.vector_stores.create(name="rag_store")
+except Exception:
+    vector_store = None
+
+search_tool = None
+if vector_store is not None:
+    search_tool = {
+        "type": "file_search",
+        "vector_store_ids": [vector_store.id],
+        "max_num_results": 5,
+    }
+
 # База данных для хранения упражнений в рамках урока
 exercise_db = {}
 
@@ -157,7 +170,10 @@ class Agent:
             input=message,
         )
 
-        tool_calls = [item for item in res.output if item.type == "function_call"]
+        tool_calls = [
+            item for item in res.output
+            if item.type == "function_call" and item.name in self.tool_map
+        ]
         if tool_calls:
             s["history"].append({"role": "func_call", "content": res.output_text})
             out = []
@@ -196,23 +212,101 @@ class Agent:
         return res
 
 
+web_search_tool = {"type": "web_search"}
+
 instruction = """
-Ты — опытный фитнес-тренер. Помогай пользователю тренироваться в зале,
-давай советы по упражнениям, питанию и ведению дневника.
-Используй функцию Exercise, чтобы сохранять выполненные упражнения.
-Используй ListExercises, чтобы показать список выполненных упражнений.
+Ты — опытный фитнес-тренер, задача которого — помочь мне тренироваться в зале. Ты можешь
+советовать упражнения, давать рекомендации по питанию и т. д. Отвечай на основе имеющейся
+дополнительной информации из файловой базы знаний, вызывая инструмент поиска `search_tool`.
+В случае если запрос касается упоминания абстрактных фитнес-клубов или новостей, используй
+поиск в интернет `web_search_tool`.
+Ты также можешь вести дневник выполненных пользователем упражнений — для этого используй
+функцию `Exercise`. Чтобы показать список выполненных упражнений, используй `ListExercises`.
 """
 
 
 def run_demo():
-    fit_agent = Agent(instruction, tools=[Exercise, ListExercises], model=model)
+    # Собираем список инструментов: сначала внешние (dict) инструменты, затем Python-модели
+    tools = []
 
+    # web_search_tool — всегда доступен
+    tools.append(web_search_tool)
+
+    # search_tool доступен, когда в проекте создан vector_store
+    if search_tool is not None:
+        tools.append(search_tool)
+
+    # Добавляем наши Pydantic-инструменты
+    tools.extend([Exercise, ListExercises])
+
+    fit_agent = Agent(
+        instruction,
+        tools=tools,
+        model=model,
+        tool_choice="required",
+    )
+
+    # Примеры взаимодействия
     response = fit_agent("Я сделал 10 приседаний, запиши!")
     print(response.output_text)
 
     response = fit_agent("Напомни, какие я сделал упражнения?")
     print(response.output_text)
 
+    # Пример запроса, когда модель должна использовать web_search_tool
+    response = fit_agent(
+        "Сколько стоит годовой абонемент в фитнес-клуб в Санкт-Петербурге?"
+    )
+    print(response.output_text)
+
 
 if __name__ == "__main__":
     run_demo()
+
+"""
+Пример запроса для поиска через веб ресурсы "web_search" 
+
+res_ws = client.responses.create(
+    model = model,
+    instructions = system_prompt,
+    tools = [ { "type": "web_search" } ],
+    input = "Сколько в среднем стоит годовой абонемент на занятия в фитнес-клубе в Москве?"
+)
+
+
+print(f"Ответ без поиска: {len(res.output)}") # напечатает 1
+print(f"Ответ с поиском: {len(res_ws.output)}") # напечатает 2
+
+previous_response_id = res_ws.id, для сохранения контекста
+
+res_ws_2 = client.responses.create(
+    model = model,
+    previous_response_id = res_ws.id,
+    tools = [ { "type": "web_search" } ],
+    input = "А поищи самый дешёвый?"
+)
+
+printx(res_ws_2.output_text) 
+
+
+с учетом фильтров по домену и региону:
+response = client.responses.create(
+    model=model,
+    input="Сделай краткий обзор отзывов на World Class Fitness",
+    tools=[
+        {
+            "type": "web_search",
+            "filters": {
+                "allowed_domains": [
+                    "otzovik.com"
+                ],
+                "user_location": {
+                    "region": "213", # Москва
+                },
+            },
+            "search_context_size": "medium", # варианты: low | medium | high
+        }
+    ]
+)
+printx(response.output_text)
+"""
