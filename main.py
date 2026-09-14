@@ -1,16 +1,17 @@
+import argparse
 import json
 
-from fitness_service import (
-    calculate_calories,
-    call_model,
-    get_exercise_history,
-    get_weight_history,
-    log_exercise,
-    log_weight,
-)
 
+def run_v1():
+    from fitness_service import (
+        calculate_calories,
+        call_model,
+        get_exercise_history,
+        get_weight_history,
+        log_exercise,
+        log_weight,
+    )
 
-if __name__ == "__main__":
     prompt = "Я сегодня сделал 3 подхода по 12 приседаний с весом 70 кг. Сегодня мой вес 45 кг."
     response = call_model(prompt, user_id="default")
 
@@ -38,3 +39,25 @@ if __name__ == "__main__":
             elif name == "calculate_calories":
                 result = calculate_calories(**args)
                 print(result)
+
+
+def run_v2():
+    from fitness_service_v2 import run_demo
+
+    run_demo()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Запуск разных версий фитнес-ассистента")
+    parser.add_argument(
+        "--version",
+        choices=["v1", "v2"],
+        default="v1",
+        help="Какая версия запускается: v1 (старый код) или v2 (новый уроковый вариант)",
+    )
+    args = parser.parse_args()
+
+    if args.version == "v1":
+        run_v1()
+    else:
+        run_v2()
