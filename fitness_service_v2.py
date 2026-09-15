@@ -224,7 +224,6 @@ instruction = """
 функцию `Exercise`. Чтобы показать список выполненных упражнений, используй `ListExercises`.
 """
 
-
 def run_demo():
     # Собираем список инструментов: сначала внешние (dict) инструменты, затем Python-модели
     tools = []
@@ -263,50 +262,3 @@ def run_demo():
 if __name__ == "__main__":
     run_demo()
 
-"""
-Пример запроса для поиска через веб ресурсы "web_search" 
-
-res_ws = client.responses.create(
-    model = model,
-    instructions = system_prompt,
-    tools = [ { "type": "web_search" } ],
-    input = "Сколько в среднем стоит годовой абонемент на занятия в фитнес-клубе в Москве?"
-)
-
-
-print(f"Ответ без поиска: {len(res.output)}") # напечатает 1
-print(f"Ответ с поиском: {len(res_ws.output)}") # напечатает 2
-
-previous_response_id = res_ws.id, для сохранения контекста
-
-res_ws_2 = client.responses.create(
-    model = model,
-    previous_response_id = res_ws.id,
-    tools = [ { "type": "web_search" } ],
-    input = "А поищи самый дешёвый?"
-)
-
-printx(res_ws_2.output_text) 
-
-
-с учетом фильтров по домену и региону:
-response = client.responses.create(
-    model=model,
-    input="Сделай краткий обзор отзывов на World Class Fitness",
-    tools=[
-        {
-            "type": "web_search",
-            "filters": {
-                "allowed_domains": [
-                    "otzovik.com"
-                ],
-                "user_location": {
-                    "region": "213", # Москва
-                },
-            },
-            "search_context_size": "medium", # варианты: low | medium | high
-        }
-    ]
-)
-printx(response.output_text)
-"""
