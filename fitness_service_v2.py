@@ -7,6 +7,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel, Field
+from weather import weather_tool
 
 load_dotenv()
 
@@ -21,20 +22,35 @@ client = OpenAI(
 
 model = f"gpt://{folder_id}/qwen3-235b-a22b-fp8/latest"
 
-try:
-    vector_store = client.vector_stores.create(name="rag_store")
-except Exception:
-    vector_store = None
+#try:
+#    vector_store = client.vector_stores.create(name="rag_store")
+#except Exception:
+#    vector_store = None
 
-search_tool = None
-if vector_store is not None:
-    search_tool = {
-        "type": "file_search",
-        "vector_store_ids": [vector_store.id],
-        "max_num_results": 5,
-    }
+#search_tool = None
 
-# База данных для хранения упражнений в рамках урока
+#if vector_store is not None:
+#    search_tool = {
+#        "type": "file_search",
+#        "vector_store_ids": [vector_store.id],
+#        "max_num_results": 5,
+#    }
+
+vector_store_id = "fvt3dc3lfoni7tfbu7e5"
+
+search_tool = {
+    "type": "file_search",
+    "vector_store_ids": [vector_store_id],
+    "max_num_results": 5,
+}
+
+notes_tool = {
+    "type": "mcp",
+    "server_label": "PersonalNotes",
+    "server_url": "http://89.169.168.105:8000/sse",
+    "require_approval": "never",
+}
+
 exercise_db = {}
 
 
@@ -201,7 +217,8 @@ class Agent:
                     previous_response_id=res.id,
                     store=True,
                 )
-
+        print("STATUS:", res.status)
+        print("ERROR:", res.error)
         if res.status == "incomplete":
             print(f"WARNING: Incomplete response status. Reason={res.incomplete_details.reason}")
         else:
@@ -222,6 +239,9 @@ instruction = """
 поиск в интернет `web_search_tool`.
 Ты также можешь вести дневник выполненных пользователем упражнений — для этого используй
 функцию `Exercise`. Чтобы показать список выполненных упражнений, используй `ListExercises`.
+
+Ты также можешь вести заметки с помощью MCP-сервера `PersonalNotes`.
+Для дневника тренировок используй блокнот "Упражнения".
 """
 
 def run_demo():
@@ -230,6 +250,10 @@ def run_demo():
 
     # web_search_tool — всегда доступен
     tools.append(web_search_tool)
+    # MCP-сервер погоды
+    tools.append(weather_tool)
+    # MCP-сервер заметок
+    tools.append(notes_tool)
 
     # search_tool доступен, когда в проекте создан vector_store
     if search_tool is not None:
@@ -246,7 +270,7 @@ def run_demo():
     )
 
     # Примеры взаимодействия
-    response = fit_agent("Я сделал 10 приседаний, запиши!")
+    response = fit_agent("Я сделал 25 приседаний, запиши!")
     print(response.output_text)
 
     response = fit_agent("Напомни, какие я сделал упражнения?")
@@ -258,6 +282,20 @@ def run_demo():
     )
     print(response.output_text)
 
+    # Тестирование MCP-сервера заметок
+    response = fit_agent(
+        'Добавь в блокнот "Упражнения" заметку: "Сегодня сделал 25 приседаний".'
+    )
+    print(response.output_text)
+
+    response = fit_agent(
+        'Покажи мои заметки из блокнота "Упражнения"'
+    )
+    print(response.output_text)
+
+    
+    response = fit_agent("Стоит ли сегодня побегать на улице в Москве? Проверь погоду.")
+    print(response.output_text)
 
 if __name__ == "__main__":
     run_demo()
